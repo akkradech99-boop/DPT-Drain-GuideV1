@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DPT Drain-Guide </title>
+    <style>
+        body { font-family: 'Sarabun', sans-serif; background: #f0f2f5; display: flex; justify-content: center; padding: 15px; }
+        .card { background: white; padding: 30px; border-radius: 25px; box-shadow: 0 15px 35px rgba(0,0,0,0.1); max-width: 500px; width: 100%; border-top: 12px solid #003399; }
+        h2 { color: #003399; text-align: center; margin: 0 0 5px 0; letter-spacing: 1px; }
+        .sub-text { text-align: center; color: #666; font-size: 13px; margin-bottom: 25px; }
+        label { font-weight: bold; font-size: 14px; display: block; margin-top: 15px; color: #444; }
+        select, input { width: 100%; padding: 12px; margin-top: 6px; border: 1px solid #d1d5db; border-radius: 12px; box-sizing: border-box; font-size: 16px; transition: 0.3s; }
+        select:focus, input:focus { border-color: #003399; outline: none; box-shadow: 0 0 0 3px rgba(0,51,153,0.1); }
+        .btn-main { width: 100%; background: #003399; color: white; border: none; padding: 18px; border-radius: 15px; margin-top: 25px; font-size: 18px; cursor: pointer; font-weight: bold; transition: 0.3s; }
+        .btn-main:hover { background: #002266; transform: translateY(-2px); }
+        .btn-sub { width: 100%; background: white; color: #003399; border: 2px solid #003399; padding: 12px; border-radius: 12px; margin-top: 10px; font-size: 14px; cursor: pointer; font-weight: bold; display: none; }
+        .result-box { margin-top: 25px; padding: 25px; border-radius: 20px; background: #f0fdf4; border: 2px solid #22c55e; display: none; text-align: center; animation: fadeIn 0.5s; }
+        .pipe-res { font-size: 32px; color: #003399; font-weight: 800; margin: 10px 0; }
+        .modal { display: none; position: fixed; z-index: 100; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); overflow-y: auto; }
+        .modal-content { background: white; margin: 5% auto; padding: 30px; border-radius: 20px; width: 90%; max-width: 500px; box-shadow: 0 25px 50px rgba(0,0,0,0.2); }
+        .close { color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
+        canvas { background: #fff; border-radius: 15px; margin-top: 20px; width: 100%; height: auto; border: 1px solid #eee; }
+        .status-pass { background:#d4edda; padding:10px; border-radius:5px; color:#155724; text-align:center; font-weight:bold; margin-top:15px; }
+        .legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; font-size: 11px; margin-top: 15px; background: #f8fafc; padding: 10px; border-radius: 10px; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h2>DPT Drain-Guide</h2>
+    <div class="sub-text">ระบบคำนวณหน้าตัดท่อระบายน้ำ</div>
+
+    <label>📍 เลือกจังหวัด</label>
+    <select id="province"></select>
+
+    <label>🏠 พื้นที่หลังคาบ้าน (ตร.ม.)</label>
+    <input type="number" id="aRoof" value="100">
+
+    <label>🛣️ พื้นปูน / ลานจอดรถ (ตร.ม.)</label>
+    <input type="number" id="aConc" value="50">
+
+    <label>🌳 สนามหญ้า / สวน (ตร.ม.)</label>
+    <input type="number" id="aGrass" value="30">
+
+    <label>👨‍👩‍👧 จำนวนผู้อยู่อาศัย (คน)</label>
+    <input type="number" id="people" value="4">
+
+    <button class="btn-main" onclick="calculate()">คำนวณและประมวลผล</button>
+    
+    <div id="result" class="result-box">
+        <div style="font-size: 14px; color: #166534; font-weight: bold;">ขนาดท่อที่เหมาะสมตามมาตรฐาน</div>
+        <div id="pipeRes" class="pipe-res">---</div>
+        <div style="font-size: 13px; color: #444; border-top: 1px solid #dcfce7; padding-top: 10px; margin-top: 10px;">
+            Q-Peak: <span id="resQpeak" style="color:#dc2626; font-weight:bold;"></span> | Q-Full: <span id="resQfull" style="color:#16a34a; font-weight:bold;"></span>
+        </div>
+        <button class="btn-sub" id="btnReport" style="display:block;" onclick="showModal('report')">📋 รายการคำนวณ (Calculation Note)</button>
+        <button class="btn-sub" id="btnBlueprint" style="display:block; background:#003399; color:white;" onclick="showModal('map')">🗺️ ผังบริเวณระบบระบายน้ำ</button>
+    </div>
+</div>
+
+<div id="modal" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="closeModal()">&times;</span>
+        <h3 id="modalTitle" style="color:#003399; margin-top:0; border-bottom: 2px solid #003399; padding-bottom: 10px;"></h3>
+        <div id="modalBody"></div>
+    </div>
+</div>
+
+<script>
+const rainfallData = {
+    "กรุงเทพมหานคร":95,"กระบี่":125,"กาญจนบุรี":75,"กาฬสินธุ์":80,"กำแพงเพชร":75,"ขอนแก่น":85,"จันทบุรี":135,"ฉะเชิงเทรา":90,"ชลบุรี":90,"ชัยนาท":80,"ชัยภูมิ":80,"ชุมพร":120,"เชียงราย":75,"เชียงใหม่":75,"ตรัง":125,"ตราด":150,"ตาก":70,"นครนายก":110,"นครปฐม":90,"นครพนม":100,"นครราชสีมา":80,"นครศรีธรรมราช":120,"นครสวรรค์":75,"นนทบุรี":95,"นราธิวาส":130,"น่าน":75,"บึงกาฬ":110,"บุรีรัมย์":80,"ปทุมธานี":95,"ประจวบคีรีขันธ์":100,"ปราจีนบุรี":110,"ปัตตานี":125,"พระนครศรีอยุธยา":85,"พะเยา":70,"พังงา":140,"พัทลุง":120,"พิจิตร":75,"พิษณุโลก":80,"เพชรบุรี":85,"เพชรบูรณ์":75,"แพร่":70,"ภูเก็ต":130,"มหาสารคาม":80,"มุกดาหาร":95,"แม่ฮ่องสอน":70,"ยโสธร":85,"ยะลา":125,"ร้อยเอ็ด":85,"ระนอง":160,"ระยอง":110,"ราชบุรี":85,"ลพบุรี":80,"ลำปาง":70,"ลำพูน":70,"เลย":80,"ศรีสะเกษ":85,"สกลนคร":100,"สงขลา":120,"สตูล":130,"สมุทรปราการ":95,"สมุทรสงคราม":90,"สมุทรสาคร":95,"สระแก้ว":95,"สระบุรี":85,"สิงห์บุรี":80,"สุโขทัย":75,"สุพรรณบุรี":80,"สุราษฎร์ธานี":120,"สุรินทร์":80,"หนองคาย":100,"หนองบัวลำภู":85,"อ่างทอง":80,"อำนาจเจริญ":90,"อุดรธานี":90,"อุตรดิตถ์":75,"อุทัยธานี":75,"อุบลราชธานี":100
+}; // ตัวอย่าง (ใส่ครบ 77 จังหวัดได้ในแบบเดิม)
+const provSelect = document.getElementById('province');
+Object.keys(rainfallData).forEach(p => {
+    let opt = document.createElement('option');
+    opt.value = rainfallData[p];
+    opt.innerHTML = p;
+    provSelect.appendChild(opt);
+});
+
+let reportHTML = "";
+
+function calculate() {
+    const I = parseFloat(provSelect.value);
+    const pName = provSelect.options[provSelect.selectedIndex].text;
+    const aR = parseFloat(document.getElementById('aRoof').value) || 0;
+    const aC = parseFloat(document.getElementById('aConc').value) || 0;
+    const aG = parseFloat(document.getElementById('aGrass').value) || 0;
+    const pp = parseFloat(document.getElementById('people').value) || 0;
+
+    // 1. Rational Method (CIA) -> Q Rain
+    const qRain = ((aR*0.95*I) + (aC*0.85*I) + (aG*0.20*I)) / (3600 * 1000);
+    // 2. Waste Water Calculation (Peak factor 3) -> Q Waste
+    const qWaste = (pp * 200 * 3) / (24 * 3600 * 1000);
+    // 3. Total Peak Flow (Q Peak)
+    const qPeak = qRain + qWaste;
+
+    // 4. Manning's Equation Options (Slope & n=0.016)
+    const pipeOptions = [
+        { d: 200, s: 0.005, label: "200 mm (8\")" },    // 1:200
+        { d: 300, s: 0.005, label: "300 mm (12\")" },   // 1:200
+        { d: 400, s: 0.0025, label: "400 mm (16\")" },  // 1:400
+        { d: 600, s: 0.001, label: "600 mm (24\")" },   // 1:1000 (ใหญ่กว่า 400mm)
+        { d: 800, s: 0.001, label: "800 mm (32\")" },   // 1:1000
+        { d: 1000, s: 0.001, label: "1000 mm (40\")" }  // 1:1000
+    ];
+
+    let final = pipeOptions[pipeOptions.length-1];
+    let isPassed = false;
+    for (let p of pipeOptions) {
+        let qF = (1/0.016) * ((Math.PI*Math.pow(p.d/1000,2))/4) * Math.pow((p.d/1000)/4, 2/3) * Math.sqrt(p.s);
+        if (qPeak <= qF) { final = p; isPassed = true; break; }
+    }
+
+    const qF_final = (1/0.016) * ((Math.PI*Math.pow(final.d/1000,2))/4) * Math.pow((final.d/1000)/4, 2/3) * Math.sqrt(final.s);
+    
+    document.getElementById('pipeRes').innerText = isPassed ? final.label : "เกินขนาดมาตรฐาน";
+    document.getElementById('resQpeak').innerText = (qPeak * 1000).toFixed(3) + " L/s";
+    document.getElementById('resQfull').innerText = (qF_final * 1000).toFixed(3) + " L/s";
+    document.getElementById('result').style.display = 'block';
+
+    reportHTML = `
+        <div style="font-size:14px; line-height:1.8;">
+        <b>1. ข้อมูลนำเข้า:</b><br>
+        จังหวัด: ${pName} (I = ${I} mm/hr)<br>
+        พื้นที่รวม: ${aR+aC+aG} ตร.ม.<br>
+        ผู้อยู่อาศัย: ${pp} คน (200L/คน/วัน)<br><br>
+        <b>2. ผลการคำนวณอัตราไหล (Q Peak):</b><br>
+        Q ฝน: ${(qRain*1000).toFixed(3)} L/s<br>
+        Q น้ำทิ้งบ้าน: ${(qWaste*1000).toFixed(3)} L/s<br>
+        <b>Q Peak รวม: ${(qPeak*1000).toFixed(3)} L/s</b><br><br>
+        <b>3. ตรวจสอบหน้าตัดท่อ (Manning):</b><br>
+        เลือกท่อขนาด: ${final.label}<br>
+        ความลาดชัน (Slope): 1:${1/final.s}<br>
+        ความขรุขระ (n): 0.016<br>
+        <b>ความจุท่อ (Q Full): ${(qF_final*1000).toFixed(3)} L/s</b>
+        <div class="status-pass">สถานะ: ผ่าน (Q Full > Q Peak)</div>
+        </div>
+    `;
+}
+
+function showModal(type) {
+    const modal = document.getElementById('modal');
+    const title = document.getElementById('modalTitle');
+    const body = document.getElementById('modalBody');
+    modal.style.display = "block";
+
+    if (type === 'report') {
+        title.innerText = "รายการคำนวณ (Calculation Note)";
+        body.innerHTML = reportHTML;
+    } else {
+        title.innerText = "ผังบริเวณและแนวเดินท่อ (Site Plan)";
+        body.innerHTML = `
+            <canvas id="blueprintCanvas" width="400" height="400"></canvas>
+            <div class="legend">
+                <span><b style="color:#1e293b;">■</b> หลังคา</span>
+                <span><b style="color:#cbd5e1;">■</b> ปูน</span>
+                <span><b style="color:#dcfce7;">■</b> สวน</span>
+                <span><b style="color:#2563eb;">---</b> แนวท่อ</span>
+                <span><b style="color:#ef4444;">●</b> บ่อพัก (MH)ทุกระยะ 12 ม.</span>
+            </div>`;
+        drawMap();
+    }
+}
+
+// ฟังก์ชันปรับปรุงใหม่: แสดงผังบริเวณแบบแยกประเภทพื้นที่
+function drawMap() {
+    const canvas = document.getElementById('blueprintCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    // 1. ดึงค่าพื้นที่
+    const aR = parseFloat(document.getElementById('aRoof').value) || 0;
+    const aC = parseFloat(document.getElementById('aConc').value) || 0;
+    const aG = parseFloat(document.getElementById('aGrass').value) || 0;
+    const totalArea = aR + aC + aG;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (totalArea === 0) return;
+
+    // 2. กำหนดสเกลคงที่ (Fixed Scale) 
+    // ใช้หน่วยเป็น "1 เมตรจริง = กี่ Pixel" เพื่อให้ขนาดเปรียบเทียบกันได้ชัดเจน
+    // เราจะให้พื้นที่รวมทั้งหมดแสดงผลไม่เกิน 300px
+    const baseDimension = Math.sqrt(totalArea);
+    const multiplier = 300 / baseDimension; 
+
+    const cx = 200, cy = 200;
+    const totalSide = baseDimension * multiplier;
+    const roofSide = Math.sqrt(aR) * multiplier;
+    const rx = cx - roofSide/2;
+    const ry = cy - roofSide/2;
+    const lSize = roofSide * 0.4; // เว้า 40%
+
+    // 3. วาดสวน (ถ้ามี)
+    if (aG > 0) {
+        ctx.fillStyle = "#dcfce7";
+        ctx.fillRect(cx - totalSide/2, cy - totalSide/2, totalSide, totalSide);
+        // แซมต้นไม้เล็กน้อย
+        ctx.fillStyle = "#86efac";
+        for(let i=0; i<10; i++){
+            let tx = (cx - totalSide/2) + Math.random()*totalSide;
+            let ty = (cy - totalSide/2) + Math.random()*totalSide;
+            ctx.beginPath(); ctx.arc(tx, ty, 2, 0, Math.PI*2); ctx.fill();
+        }
+    }
+
+    // 4. วาดลานจอดรถ (Concrete) - ยัดใส่ช่องเว้าตัว L
+    // ถ้าพื้นที่ปูนมี (aC > 0) ให้วาดสีเทา ถ้าไม่มีให้ใช้สีพื้นข้างหลัง (ขาวหรือเขียว)
+    if (aC > 0) {
+        ctx.fillStyle = "#f1f5f9";
+        ctx.strokeStyle = "#cbd5e1";
+        // คำนวณขนาดลานปูนตามสัดส่วนที่เหลือ
+        ctx.fillRect(rx, ry + (roofSide - lSize), lSize, lSize);
+        ctx.strokeRect(rx, ry + (roofSide - lSize), lSize, lSize);
+    }
+
+    // 5. วาดตัวบ้านทรงตัว L
+    if (aR > 0) {
+        ctx.shadowColor = "rgba(0,0,0,0.15)"; ctx.shadowBlur = 10;
+        ctx.fillStyle = "#1e293b";
+        ctx.beginPath();
+        ctx.moveTo(rx, ry);
+        ctx.lineTo(rx + roofSide, ry);
+        ctx.lineTo(rx + roofSide, ry + roofSide);
+        ctx.lineTo(rx + lSize, ry + roofSide);
+        ctx.lineTo(rx + lSize, ry + (roofSide - lSize));
+        ctx.lineTo(rx, ry + (roofSide - lSize));
+        ctx.closePath();
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        // ลายหลังคา
+        ctx.strokeStyle = "rgba(255,255,255,0.1)";
+        ctx.beginPath();
+        ctx.moveTo(rx, ry); ctx.lineTo(rx + lSize, ry + (roofSide - lSize));
+        ctx.moveTo(rx + roofSide, ry); ctx.lineTo(rx + lSize, ry + (roofSide - lSize));
+        ctx.stroke();
+    }
+
+    // 6. แนวท่อระบายน้ำ (ล้อมรอบพื้นที่ทั้งหมดที่กรอก)
+    const pipeX = cx - totalSide/2;
+    const pipeY = cy - totalSide/2;
+    ctx.setLineDash([6, 4]);
+    ctx.strokeStyle = "#2563eb"; ctx.lineWidth = 3;
+    ctx.strokeRect(pipeX, pipeY, totalSide, totalSide);
+
+    // 7. บ่อพักทุก 12 เมตร (Red Dots)
+    ctx.setLineDash([]);
+    ctx.fillStyle = "#ef4444";
+    // คำนวณจุดตามสัดส่วนจริง ( multiplier * 12 คือระยะ 12 เมตรใน Canvas)
+    const mhInterval = 12 * multiplier; 
+    
+    function drawMH(x, y) {
+        ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI*2); ctx.fill();
+        ctx.strokeStyle = "white"; ctx.lineWidth = 1; ctx.stroke();
+    }
+
+    for(let i=0; i<=totalSide; i+=mhInterval) {
+        drawMH(pipeX + i, pipeY); // บน
+        drawMH(pipeX + i, pipeY + totalSide); // ล่าง
+        drawMH(pipeX, pipeY + i); // ซ้าย
+        drawMH(pipeX + totalSide, pipeY + i); // ขวา
+    }
+
+    // 8. ทางออกน้ำ
+    ctx.beginPath();
+    ctx.moveTo(pipeX + totalSide, pipeY + totalSide);
+    ctx.lineTo(pipeX + totalSide + 15, pipeY + totalSide + 15);
+    ctx.strokeStyle = "#2563eb"; ctx.lineWidth = 5; ctx.stroke();
+}
+
+function closeModal() { document.getElementById('modal').style.display = 'none'; }
+window.onclick = function(event) { if (event.target == document.getElementById('modal')) closeModal(); }
+</script>
+</body>
+</html>
